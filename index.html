@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC/EUR Live Terminal & Discord Webhook</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        btc: '#F7931A',
+                        bgDark: '#09090b',
+                        cardDark: '#121215',
+                        borderDark: '#27272a'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #09090b;
+            color: #f4f4f5;
+            font-family: 'Inter', sans-serif;
+        }
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #09090b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f3f46;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.8; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+        .live-dot::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 9999px;
+            background-color: #10b981;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col selection:bg-btc/30 selection:text-btc">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-btc/15 border border-btc/30 flex items-center justify-center text-btc shadow-lg shadow-btc/10">
+                    <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                        <path d="M23.638 14.904c-1.602 6.43-8.113 10.34-14.542 8.736C2.67 22.05-1.244 15.525.362 9.105 1.962 2.67 8.475-1.243 14.9.358c6.43 1.605 10.342 8.115 8.738 14.548v-.002zm-6.35-4.613c.24-1.59-.974-2.45-2.64-3.03l.54-2.153-1.315-.33-.525 2.107c-.345-.087-.705-.167-1.064-.25l.526-2.127-1.32-.33-.54 2.165c-.285-.067-.565-.132-.84-.2l-1.815-.45-.35 1.407s.975.225.955.236c.535.136.63.486.615.766l-1.477 5.92c-.075.166-.24.406-.614.314.015.02-.96-.24-.96-.24l-.66 1.51 1.71.426.93.242-.54 2.19 1.32.327.54-2.17c.36.1.705.19 1.05.273l-.51 2.154 1.32.33.545-2.19c2.24.427 3.93.257 4.64-1.774.57-1.637-.03-2.58-1.217-3.196.854-.193 1.5-.76 1.68-1.93h.01zm-3.01 4.22c-.404 1.64-3.157.75-4.05.53l.72-2.9c.896.23 3.757.67 3.33 2.37zm.41-4.24c-.37 1.49-2.662.735-3.405.55l.654-2.64c.744.18 3.137.524 2.75 2.084v.006z"/>
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="font-bold text-base sm:text-lg tracking-tight text-white">BTC / EUR <span class="text-zinc-500 font-normal">Terminal</span></h1>
+                        <span class="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <span class="relative w-1.5 h-1.5 rounded-full bg-emerald-400 live-dot"></span>
+                            LIVE
+                        </span>
+                    </div>
+                    <p class="text-xs text-zinc-400 hidden sm:block">Flux temps réel & Rapports automatiques Discord</p>
+                </div>
+            </div>
+
+            <!-- Right Status & Quick Actions -->
+            <div class="flex items-center gap-2 sm:gap-4">
+                <div class="text-right hidden md:block">
+                    <div class="text-[11px] text-zinc-400 uppercase tracking-wider">Prochain rapport Discord</div>
+                    <div id="header-countdown" class="mono text-sm font-semibold text-btc">30:00</div>
+                </div>
+                <button onclick="sendDiscordReport(true)" id="header-send-btn" class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs sm:text-sm font-medium transition-all shadow-lg shadow-indigo-600/20 cursor-pointer">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    <span>Envoyer sur Discord</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Dashboard Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Top Market Ticker Strip -->
+        <section class="grid grid-cols-1 lg:grid-cols-12 gap-4 bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-5 shadow-xl">
+            <!-- Price & Main Change -->
+            <div class="lg:col-span-5 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-zinc-800 pb-4 lg:pb-0 lg:pr-6">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                        Bitcoin <span class="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] mono">BTCEUR</span>
+                    </span>
+                    <span id="data-source-badge" class="text-[11px] text-zinc-500 mono">Source: Kraken / CoinGecko / Binance</span>
+                </div>
+                <div class="my-2 flex items-baseline gap-3 flex-wrap">
+                    <div id="btc-price" class="mono text-3xl sm:text-4xl font-bold tracking-tight text-white">
+                        Chargement...
+                    </div>
+                    <div id="btc-change-24h" class="mono inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-semibold bg-zinc-800 text-zinc-300">
+                        0.00%
+                    </div>
+                </div>
+                <div class="flex items-center justify-between text-xs text-zinc-400">
+                    <span>Var. 24h : <strong id="btc-diff-eur" class="mono text-zinc-200">-- €</strong></span>
+                    <span>Var. session (30m) : <strong id="btc-change-30m" class="mono text-zinc-200">0.00%</strong></span>
+                </div>
+            </div>
+
+            <!-- 24h Market Stats -->
+            <div class="lg:col-span-7 grid grid-cols-2 sm:grid-cols-4 gap-4 items-center pl-0 lg:pl-2">
+                <div class="bg-zinc-950/60 border border-zinc-800/60 rounded-xl p-3.5">
+                    <div class="text-xs text-zinc-400 mb-1 flex items-center gap-1">
+                        <i data-lucide="arrow-up-right" class="w-3.5 h-3.5 text-emerald-400"></i> Plus Haut 24h
+                    </div>
+                    <div id="btc-high-24h" class="mono text-sm sm:text-base font-semibold text-zinc-100">-- €</div>
+                </div>
+                <div class="bg-zinc-950/60 border border-zinc-800/60 rounded-xl p-3.5">
+                    <div class="text-xs text-zinc-400 mb-1 flex items-center gap-1">
+                        <i data-lucide="arrow-down-right" class="w-3.5 h-3.5 text-rose-400"></i> Plus Bas 24h
+                    </div>
+                    <div id="btc-low-24h" class="mono text-sm sm:text-base font-semibold text-zinc-100">-- €</div>
+                </div>
+                <div class="bg-zinc-950/60 border border-zinc-800/60 rounded-xl p-3.5">
+                    <div class="text-xs text-zinc-400 mb-1 flex items-center gap-1">
+                        <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-btc"></i> Volume 24h
+                    </div>
+                    <div id="btc-vol-24h" class="mono text-sm sm:text-base font-semibold text-zinc-100">-- €</div>
+                </div>
+                <div class="bg-zinc-950/60 border border-zinc-800/60 rounded-xl p-3.5">
+                    <div class="text-xs text-zinc-400 mb-1 flex items-center gap-1">
+                        <i data-lucide="globe" class="w-3.5 h-3.5 text-indigo-400"></i> Cap. Boursière
+                    </div>
+                    <div id="btc-mcap" class="mono text-sm sm:text-base font-semibold text-zinc-100">-- Md€</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Grid: Chart (Left 8 cols) + Discord Bot Control (Right 4 cols) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Column: Chart & Secondary Widgets -->
+            <div class="lg:col-span-8 space-y-6">
+                
+                <!-- Interactive Chart Card -->
+                <div class="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-5 shadow-xl">
+                    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <div>
+                            <h2 class="text-base font-semibold text-white flex items-center gap-2">
+                                <i data-lucide="trending-up" class="w-4 h-4 text-btc"></i>
+                                Graphique BTC / EUR
+                            </h2>
+                            <p class="text-xs text-zinc-400" id="chart-subtitle">Évolution sur les dernières 24 heures (Exporté vers Discord)</p>
+                        </div>
+
+                        <!-- Timeframe & Manual Download Controls -->
+                        <div class="flex items-center gap-2">
+                            <div class="inline-flex rounded-xl bg-zinc-950 p-1 border border-zinc-800">
+                                <button onclick="changeTimeframe('1H')" id="tf-1H" class="tf-btn px-3 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-white transition cursor-pointer">1H</button>
+                                <button onclick="changeTimeframe('24H')" id="tf-24H" class="tf-btn px-3 py-1 rounded-lg text-xs font-medium bg-zinc-800 text-white shadow cursor-pointer">24H</button>
+                                <button onclick="changeTimeframe('7D')" id="tf-7D" class="tf-btn px-3 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-white transition cursor-pointer">7J</button>
+                            </div>
+                            <button onclick="downloadChartImage()" title="Télécharger le graphique en PNG" class="p-2 rounded-xl bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 transition cursor-pointer">
+                                <i data-lucide="download" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Responsive Canvas Container -->
+                    <div class="relative w-full h-[320px] sm:h-[380px] rounded-xl overflow-hidden bg-[#0c0c0f] border border-zinc-800/60 p-2">
+                        <canvas id="btcChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Extra Useful Tools Row: Fear & Greed + Price Alert + Converter -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    
+                    <!-- Widget 1: Crypto Fear & Greed Index -->
+                    <div class="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-5 flex flex-col justify-between">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                                <i data-lucide="gauge" class="w-4 h-4 text-btc"></i> Fear & Greed
+                            </span>
+                            <span class="text-[11px] text-zinc-500">Sentiment</span>
+                        </div>
+                        <div class="my-2 text-center">
+                            <div id="fng-value" class="mono text-4xl font-bold text-white">--</div>
+                            <div id="fng-label" class="text-sm font-medium text-amber-400 mt-1">Chargement...</div>
+                        </div>
+                        <div class="w-full bg-zinc-800 h-2.5 rounded-full overflow-hidden mt-3">
+                            <div id="fng-bar" class="h-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 transition-all duration-700" style="width: 50%"></div>
+                        </div>
+                        <div class="flex justify-between text-[10px] text-zinc-500 mt-1.5">
+                            <span>Peur extrême (0)</span>
+                            <span>Avidité (100)</span>
+                        </div>
+                    </div>
+
+                    <!-- Widget 2: Custom Price Alert to Discord -->
+                    <div class="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                                    <i data-lucide="bell-ring" class="w-4 h-4 text-rose-400"></i> Alerte Prix Discord
+                                </span>
+                                <span id="alert-status-badge" class="text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">Inactive</span>
+                            </div>
+                            <p class="text-xs text-zinc-400 mb-3">Envoie une alerte urgente sur Discord si le BTC franchit ce seuil (€) :</p>
+                            <div class="flex gap-2">
+                                <input type="number" id="alert-target-price" autocomplete="off" placeholder="Ex: 95000" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-sm mono text-white focus:outline-none focus:border-btc">
+                                <button onclick="togglePriceAlert()" id="alert-toggle-btn" class="px-3 py-2 rounded-xl bg-btc hover:bg-amber-500 text-zinc-950 font-semibold text-xs transition shrink-0 cursor-pointer">
+                                    Activer
+                                </button>
+                            </div>
+                        </div>
+                        <div id="alert-info-text" class="text-[11px] text-zinc-500 mt-3">
+                            Aucune alerte configurée.
+                        </div>
+                    </div>
+
+                    <!-- Widget 3: Fast EUR <-> BTC / Sats Converter -->
+                    <div class="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-5 flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                                    <i data-lucide="arrow-left-right" class="w-4 h-4 text-emerald-400"></i> Convertisseur
+                                </span>
+                                <span class="text-[11px] text-zinc-500">Temps réel</span>
+                            </div>
+                            <div class="space-y-2.5">
+                                <div class="relative">
+                                    <input type="number" id="conv-eur" value="100" autocomplete="off" oninput="convertFromEur()" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-3 pr-12 py-2 text-sm mono text-white focus:outline-none focus:border-btc">
+                                    <span class="absolute right-3 top-2 text-xs font-semibold text-zinc-400">EUR</span>
+                                </div>
+                                <div class="relative">
+                                    <input type="number" id="conv-btc" step="0.000001" autocomplete="off" oninput="convertFromBtc()" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-3 pr-12 py-2 text-sm mono text-white focus:outline-none focus:border-btc">
+                                    <span class="absolute right-3 top-2 text-xs font-semibold text-btc">BTC</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-[11px] text-zinc-400 mt-3 flex justify-between">
+                            <span>Équivalent Satoshis :</span>
+                            <span id="conv-sats" class="mono text-zinc-200 font-medium">-- sats</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Right Column: Discord Automation & Logs -->
+            <div class="lg:col-span-4 space-y-6">
+                
+                <!-- Discord Webhook Automation Panel -->
+                <div class="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-5 shadow-xl space-y-5">
+                    <div class="flex items-center justify-between border-b border-zinc-800 pb-4">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                                <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 class="text-sm font-semibold text-white">Bot Webhook Discord</h2>
+                                <p class="text-[11px] text-zinc-400">GitHub Actions + Mode Direct</p>
+                            </div>
+                        </div>
+
+                        <!-- Auto-Send Toggle Switch -->
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="auto-send-toggle" class="sr-only peer" checked onchange="toggleAutoSend()">
+                            <div class="w-11 h-6 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                    </div>
+
+                    <!-- Countdown Display Box -->
+                    <div class="bg-zinc-950 border border-zinc-800/90 rounded-xl p-4 text-center relative overflow-hidden">
+                        <div class="text-xs text-zinc-400 mb-1">Prochain envoi automatique dans</div>
+                        <div id="main-countdown" class="mono text-3xl font-bold text-white tracking-wider">30:00</div>
+                        <div class="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden mt-3">
+                            <div id="countdown-progress" class="h-full bg-indigo-500 transition-all duration-1000" style="width: 100%"></div>
+                        </div>
+                        <div class="flex justify-between text-[11px] text-zinc-500 mt-2">
+                            <span>Intervalle : 30 min</span>
+                            <span id="auto-status-label" class="text-emerald-400 font-medium">● Actif</span>
+                        </div>
+                    </div>
+
+                    <!-- Webhook URL Configuration -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <label class="text-xs font-medium text-zinc-300">URL du Webhook Discord</label>
+                            <button onclick="toggleWebhookVisibility()" class="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer">
+                                <i data-lucide="eye" id="eye-icon" class="w-3.5 h-3.5"></i>
+                                <span id="eye-text">Afficher</span>
+                            </button>
+                        </div>
+                        <div class="relative">
+                            <input type="password" id="webhook-url" autocomplete="new-password" value="https://discord.com/api/webhooks/1571296802337071266/3Iz_fxWrcB3RlKrv2zZWUITrMv36FqRbcFoiZnVG9oEDpiR2DWlhmGuXxcvux7AX98dc" class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs mono text-zinc-300 focus:outline-none focus:border-indigo-500 pr-10">
+                            <button onclick="saveWebhookUrl()" title="Sauvegarder l'URL localement" class="absolute right-2 top-2 p-1 text-zinc-400 hover:text-emerald-400 transition cursor-pointer">
+                                <i data-lucide="check" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Manual Test & Reset Timer Buttons -->
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <button onclick="sendDiscordReport(true)" id="manual-send-btn" class="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition shadow-lg shadow-indigo-600/20 cursor-pointer">
+                            <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                            Tester maintenant
+                        </button>
+                        <button onclick="resetTimer()" class="col-span-2 sm:col-span-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition cursor-pointer">
+                            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                            Reset 30:00
+                        </button>
+                    </div>
+
+                    <!-- GitHub Actions Ready Badge -->
+                    <div class="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-xs text-emerald-200/90 space-y-1">
+                        <div class="font-semibold flex items-center gap-1.5 text-emerald-400">
+                            <i data-lucide="shield-check" class="w-4 h-4 shrink-0"></i>
+                            Webhook Préconfiguré & Multi-Sources
+                        </div>
+                        <p class="text-[11px] leading-relaxed text-zinc-300">
+                            Ton Webhook est déjà intégré et prêt à fonctionner directement sur ton site et avec GitHub Actions. Sources de prix : Kraken, CoinGecko et Binance en secours automatique.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Live Activity Logs Card -->
+                <div class="bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-5 shadow-xl flex flex-col h-[280px]">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                            <i data-lucide="terminal" class="w-4 h-4 text-emerald-400"></i> Journal d'activité
+                        </h3>
+                        <button onclick="clearLogs()" class="text-[11px] text-zinc-500 hover:text-zinc-300 cursor-pointer">Effacer</button>
+                    </div>
+                    <div id="activity-logs" class="flex-1 overflow-y-auto space-y-2 pr-1 text-xs mono">
+                        <!-- Logs injected dynamically -->
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- Application Logic -->
+    <script>
+        lucide.createIcons();
+
+        const DEFAULT_WEBHOOK_URL = "https://discord.com/api/webhooks/1571296802337071266/3Iz_fxWrcB3RlKrv2zZWUITrMv36FqRbcFoiZnVG9oEDpiR2DWlhmGuXxcvux7AX98dc";
+        const INTERVAL_SECONDS = 30 * 60;
+        let remainingSeconds = INTERVAL_SECONDS;
+        let isAutoSendEnabled = true;
+        let currentTimeframe = '24H';
+        let btcChart = null;
+        window.dataReady = false;
+        window.discordSentSuccess = false;
+
+        let marketData = {
+            price: 0,
+            change24h: 0,
+            diff24hEur: 0,
+            high24h: 0,
+            low24h: 0,
+            volume24h: 0,
+            marketCap: 0,
+            lastSentPrice: parseFloat(localStorage.getItem('btc_last_sent_price')) || null,
+            fngValue: 50,
+            fngClassification: 'Neutre'
+        };
+
+        let priceAlert = {
+            active: false,
+            target: null,
+            direction: null
+        };
+
+        const formatEur = (val, decimals = 2) => {
+            if (val === null || val === undefined || isNaN(val)) return '-- €';
+            return new Intl.NumberFormat('fr-FR', {
+                style: 'currency',
+                currency: 'EUR',
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            }).format(val);
+        };
+
+        const formatCompactEur = (val) => {
+            if (!val) return '-- €';
+            if (val >= 1e9) return (val / 1e9).toFixed(2).replace('.', ',') + ' Md€';
+            if (val >= 1e6) return (val / 1e6).toFixed(2).replace('.', ',') + ' M€';
+            return formatEur(val, 0);
+        };
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const colors = {
+                success: 'bg-zinc-900 border-emerald-500/50 text-emerald-300',
+                error: 'bg-zinc-900 border-rose-500/50 text-rose-300',
+                info: 'bg-zinc-900 border-indigo-500/50 text-indigo-300',
+                warning: 'bg-zinc-900 border-amber-500/50 text-amber-300'
+            };
+
+            toast.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-2xl text-xs font-medium transition-all duration-300 transform translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+            toast.innerHTML = `<span>${message}</span>`;
+            
+            container.appendChild(toast);
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        function addLog(message, type = 'info') {
+            const logsContainer = document.getElementById('activity-logs');
+            const now = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            
+            const colorClass = {
+                success: 'text-emerald-400',
+                error: 'text-rose-400',
+                warning: 'text-amber-400',
+                info: 'text-zinc-300'
+            }[type] || 'text-zinc-300';
+
+            const entry = document.createElement('div');
+            entry.className = 'p-2 rounded-lg bg-zinc-950/80 border border-zinc-800/60 leading-relaxed';
+            entry.innerHTML = `<span class="text-zinc-500">[${now}]</span> <span class="${colorClass}">${message}</span>`;
+            
+            logsContainer.prepend(entry);
+            if (logsContainer.children.length > 50) {
+                logsContainer.lastChild.remove();
+            }
+        }
+
+        function clearLogs() {
+            document.getElementById('activity-logs').innerHTML = '';
+            addLog('Journal effacé.', 'info');
+        }
+
+        // Fetch Live BTC/EUR Ticker Data (Kraken Primary -> CoinGecko -> Binance)
+        async function fetchMarketStats() {
+            // 1. Try Kraken Public API (Never geo-blocked, CORS enabled)
+            try {
+                const res = await fetch('https://api.kraken.com/0/public/Ticker?pair=XXBTZEUR');
+                if (!res.ok) throw new Error('Kraken HTTP ' + res.status);
+                const json = await res.json();
+                if (json.error && json.error.length > 0) throw new Error(json.error[0]);
+
+                const ticker = json.result.XXBTZEUR;
+                const price = parseFloat(ticker.c[0]);
+                const open24h = parseFloat(ticker.o);
+                const high24h = parseFloat(ticker.h[1]);
+                const low24h = parseFloat(ticker.l[1]);
+                const volBtc = parseFloat(ticker.v[1]);
+                const vwap = parseFloat(ticker.p[1]);
+
+                const diff24hEur = price - open24h;
+                const change24h = open24h > 0 ? (diff24hEur / open24h) * 100 : 0;
+
+                marketData.price = price;
+                marketData.change24h = change24h;
+                marketData.diff24hEur = diff24hEur;
+                marketData.high24h = high24h;
+                marketData.low24h = low24h;
+                marketData.volume24h = volBtc * vwap;
+                marketData.marketCap = price * 19850000;
+
+                if (marketData.lastSentPrice === null) {
+                    marketData.lastSentPrice = price;
+                }
+
+                document.getElementById('data-source-badge').textContent = 'Source: Kraken Live';
+                updateMarketUI();
+                checkPriceAlert();
+                updateConverterFromCurrentPrice();
+                return;
+            } catch (e1) {
+                // Fallback to CoinGecko
+            }
+
+            // 2. Try CoinGecko Public API
+            try {
+                const cgRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=eur&include_24hr_vol=true&include_24hr_change=true&include_market_cap=true');
+                if (!cgRes.ok) throw new Error('CoinGecko error');
+                const cgData = await cgRes.json();
+                const btc = cgData.bitcoin;
+
+                marketData.price = btc.eur;
+                marketData.change24h = btc.eur_24h_change;
+                marketData.diff24hEur = btc.eur - (btc.eur / (1 + btc.eur_24h_change / 100));
+                marketData.volume24h = btc.eur_24h_vol;
+                marketData.marketCap = btc.eur_market_cap;
+
+                if (marketData.lastSentPrice === null) {
+                    marketData.lastSentPrice = btc.eur;
+                }
+
+                document.getElementById('data-source-badge').textContent = 'Source: CoinGecko Live';
+                updateMarketUI();
+                checkPriceAlert();
+                updateConverterFromCurrentPrice();
+                return;
+            } catch (e2) {
+                // Fallback to Binance
+            }
+
+            // 3. Try Binance Public API
+            try {
+                const res = await fetch('https://api.binance.com/api/v3/ticker/24hr?symbol=BTCEUR');
+                if (!res.ok) throw new Error('Binance error');
+                const data = await res.json();
+
+                marketData.price = parseFloat(data.lastPrice);
+                marketData.change24h = parseFloat(data.priceChangePercent);
+                marketData.diff24hEur = parseFloat(data.priceChange);
+                marketData.high24h = parseFloat(data.highPrice);
+                marketData.low24h = parseFloat(data.lowPrice);
+                marketData.volume24h = parseFloat(data.quoteVolume);
+                marketData.marketCap = marketData.price * 19850000;
+
+                if (marketData.lastSentPrice === null) {
+                    marketData.lastSentPrice = marketData.price;
+                }
+
+                document.getElementById('data-source-badge').textContent = 'Source: Binance Live';
+                updateMarketUI();
+                checkPriceAlert();
+                updateConverterFromCurrentPrice();
+            } catch (e3) {
+                addLog('Erreur de connexion aux flux de prix (vérifie ton VPN/bloqueur).', 'error');
+            }
+        }
+
+        function updateMarketUI() {
+            const isPositive = marketData.change24h >= 0;
+            const sign = isPositive ? '+' : '';
+
+            document.getElementById('btc-price').textContent = formatEur(marketData.price);
+            
+            const changeBadge = document.getElementById('btc-change-24h');
+            changeBadge.textContent = `${sign}${marketData.change24h.toFixed(2)}%`;
+            changeBadge.className = `mono inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-semibold ${
+                isPositive 
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' 
+                : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+            }`;
+
+            const diffEl = document.getElementById('btc-diff-eur');
+            diffEl.textContent = `${sign}${formatEur(marketData.diff24hEur)}`;
+            diffEl.className = `mono ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            const sessionChange = marketData.lastSentPrice 
+                ? ((marketData.price - marketData.lastSentPrice) / marketData.lastSentPrice) * 100 
+                : 0;
+            const sessionSign = sessionChange >= 0 ? '+' : '';
+            const sessionEl = document.getElementById('btc-change-30m');
+            sessionEl.textContent = `${sessionSign}${sessionChange.toFixed(2)}%`;
+            sessionEl.className = `mono ${sessionChange >= 0 ? 'text-emerald-400' : 'text-rose-400'}`;
+
+            document.getElementById('btc-high-24h').textContent = formatEur(marketData.high24h, 0);
+            document.getElementById('btc-low-24h').textContent = formatEur(marketData.low24h, 0);
+            document.getElementById('btc-vol-24h').textContent = formatCompactEur(marketData.volume24h);
+            document.getElementById('btc-mcap').textContent = formatCompactEur(marketData.marketCap);
+        }
+
+        // Fetch Historical OHLC/Klines & Render Chart.js (Kraken Primary -> CoinGecko -> Binance)
+        async function fetchChartData(timeframe = '24H') {
+            const subtitles = {
+                '1H': 'Évolution sur la dernière heure (intervalles 1 min)',
+                '24H': 'Évolution sur les dernières 24 heures (intervalles 30 min)',
+                '7D': 'Évolution sur les 7 derniers jours (intervalles 4h)'
+            };
+            document.getElementById('chart-subtitle').textContent = subtitles[timeframe] || subtitles['24H'];
+
+            // 1. Try Kraken OHLC API
+            try {
+                const krakenCfg = {
+                    '1H': { interval: 1, limit: 60 },
+                    '24H': { interval: 30, limit: 48 },
+                    '7D': { interval: 240, limit: 42 }
+                }[timeframe] || { interval: 30, limit: 48 };
+
+                const res = await fetch(`https://api.kraken.com/0/public/OHLC?pair=XXBTZEUR&interval=${krakenCfg.interval}`);
+                if (!res.ok) throw new Error('Kraken OHLC error');
+                const json = await res.json();
+                if (json.error && json.error.length > 0) throw new Error(json.error[0]);
+
+                const candles = json.result.XXBTZEUR.slice(-krakenCfg.limit);
+                const labels = candles.map(c => {
+                    const date = new Date(c[0] * 1000);
+                    if (timeframe === '7D') {
+                        return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                    }
+                    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                });
+                const prices = candles.map(c => parseFloat(c[4]));
+
+                if (!marketData.high24h && prices.length > 0) {
+                    marketData.high24h = Math.max(...prices);
+                    marketData.low24h = Math.min(...prices);
+                    updateMarketUI();
+                }
+
+                renderChart(labels, prices);
+                return;
+            } catch (e1) {
+                // Fallback to CoinGecko market_chart
+            }
+
+            // 2. Try CoinGecko Market Chart API
+            try {
+                const days = timeframe === '7D' ? 7 : 1;
+                const cgRes = await fetch(`https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=eur&days=${days}`);
+                if (!cgRes.ok) throw new Error('CoinGecko chart error');
+                const cgData = await cgRes.json();
+                let pts = cgData.prices || [];
+                if (timeframe === '1H') pts = pts.slice(-15);
+
+                const labels = pts.map(p => {
+                    const date = new Date(p[0]);
+                    if (timeframe === '7D') {
+                        return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                    }
+                    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                });
+                const prices = pts.map(p => p[1]);
+
+                if (!marketData.high24h && prices.length > 0) {
+                    marketData.high24h = Math.max(...prices);
+                    marketData.low24h = Math.min(...prices);
+                    updateMarketUI();
+                }
+
+                renderChart(labels, prices);
+                return;
+            } catch (e2) {
+                // Fallback to Binance
+            }
+
+            // 3. Try Binance Klines API
+            try {
+                const binanceCfg = {
+                    '1H': { interval: '1m', limit: 60 },
+                    '24H': { interval: '30m', limit: 48 },
+                    '7D': { interval: '4h', limit: 42 }
+                }[timeframe] || { interval: '30m', limit: 48 };
+
+                const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=BTCEUR&interval=${binanceCfg.interval}&limit=${binanceCfg.limit}`);
+                if (!res.ok) throw new Error('Binance Klines error');
+                const klines = await res.json();
+
+                const labels = klines.map(k => {
+                    const date = new Date(k[0]);
+                    if (timeframe === '7D') {
+                        return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) + ' ' + date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                    }
+                    return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                });
+                const prices = klines.map(k => parseFloat(k[4]));
+                renderChart(labels, prices);
+            } catch (e3) {
+                addLog('Impossible de charger le graphique (API bloquées).', 'error');
+            }
+        }
+
+        const darkCanvasBackgroundPlugin = {
+            id: 'customCanvasBackgroundColor',
+            beforeDraw: (chart) => {
+                const { ctx, width, height } = chart;
+                ctx.save();
+                ctx.globalCompositeOperation = 'destination-over';
+                ctx.fillStyle = '#0c0c0f';
+                ctx.fillRect(0, 0, width, height);
+                ctx.restore();
+            }
+        };
+
+        function renderChart(labels, prices) {
+            const ctx = document.getElementById('btcChart').getContext('2d');
+            const isUp = prices[prices.length - 1] >= prices[0];
+            const lineColor = isUp ? '#10b981' : '#f43f5e';
+            const gradientTop = isUp ? 'rgba(16, 185, 129, 0.28)' : 'rgba(244, 63, 94, 0.28)';
+            const gradientBottom = 'rgba(12, 12, 15, 0.0)';
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 360);
+            gradient.addColorStop(0, gradientTop);
+            gradient.addColorStop(1, gradientBottom);
+
+            if (btcChart) {
+                btcChart.data.labels = labels;
+                btcChart.data.datasets[0].data = prices;
+                btcChart.data.datasets[0].borderColor = lineColor;
+                btcChart.data.datasets[0].backgroundColor = gradient;
+                btcChart.update('none');
+                return;
+            }
+
+            btcChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'BTC / EUR',
+                        data: prices,
+                        borderColor: lineColor,
+                        backgroundColor: gradient,
+                        borderWidth: 2.5,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        pointHoverBackgroundColor: '#F7931A',
+                        pointHoverBorderColor: '#ffffff',
+                        fill: true,
+                        tension: 0.25
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#18181b',
+                            titleColor: '#a1a1aa',
+                            bodyColor: '#ffffff',
+                            borderColor: '#27272a',
+                            borderWidth: 1,
+                            padding: 10,
+                            displayColors: false,
+                            callbacks: {
+                                label: (context) => `Prix : ${formatEur(context.parsed.y)}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(39, 39, 42, 0.4)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#71717a',
+                                maxTicksLimit: 8,
+                                font: { family: 'JetBrains Mono', size: 11 }
+                            }
+                        },
+                        y: {
+                            position: 'right',
+                            grid: {
+                                color: 'rgba(39, 39, 42, 0.4)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#a1a1aa',
+                                font: { family: 'JetBrains Mono', size: 11 },
+                                callback: (value) => value.toLocaleString('fr-FR') + ' €'
+                            }
+                        }
+                    }
+                },
+                plugins: [darkCanvasBackgroundPlugin]
+            });
+        }
+
+        function changeTimeframe(tf) {
+            currentTimeframe = tf;
+            document.querySelectorAll('.tf-btn').forEach(btn => {
+                btn.className = 'tf-btn px-3 py-1 rounded-lg text-xs font-medium text-zinc-400 hover:text-white transition cursor-pointer';
+            });
+            document.getElementById(`tf-${tf}`).className = 'tf-btn px-3 py-1 rounded-lg text-xs font-medium bg-zinc-800 text-white shadow cursor-pointer';
+            fetchChartData(tf);
+        }
+
+        function downloadChartImage() {
+            const canvas = document.getElementById('btcChart');
+            const link = document.createElement('a');
+            link.download = `BTC-EUR_${new Date().toISOString().slice(0,16).replace(':','h')}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            showToast('Graphique téléchargé en PNG !', 'success');
+        }
+
+        async function fetchFearAndGreed() {
+            try {
+                const res = await fetch('https://api.alternative.me/fng/?limit=1');
+                const data = await res.json();
+                const item = data.data[0];
+                const val = parseInt(item.value, 10);
+
+                const translations = {
+                    'Extreme Fear': 'Peur Extrême 😱',
+                    'Fear': 'Peur 😨',
+                    'Neutral': 'Neutre 😐',
+                    'Greed': 'Avidité 🤑',
+                    'Extreme Greed': 'Avidité Extrême 🚀'
+                };
+
+                marketData.fngValue = val;
+                marketData.fngClassification = translations[item.value_classification] || item.value_classification;
+
+                document.getElementById('fng-value').textContent = `${val}/100`;
+                document.getElementById('fng-label').textContent = marketData.fngClassification;
+                document.getElementById('fng-bar').style.width = `${val}%`;
+            } catch (err) {
+                document.getElementById('fng-label').textContent = 'Indisponible';
+            }
+        }
+
+        async function sendDiscordReport(isManual = false, customAlertTitle = null, overrideWebhookUrl = null) {
+            const inputVal = (document.getElementById('webhook-url').value || '').trim();
+            const webhookUrl = (overrideWebhookUrl || inputVal || DEFAULT_WEBHOOK_URL).trim();
+
+            if (!webhookUrl.startsWith('https://discord.com/api/webhooks/')) {
+                showToast('URL de Webhook Discord invalide.', 'error');
+                addLog('Échec : URL de Webhook invalide.', 'error');
+                return false;
+            }
+
+            if (!marketData.price) {
+                showToast('En attente des données de prix BTC...', 'warning');
+                return false;
+            }
+
+            const btn = document.getElementById('manual-send-btn');
+            if (isManual && btn) {
+                btn.disabled = true;
+                btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Envoi...`;
+                lucide.createIcons();
+            }
+
+            try {
+                let prevPrice = marketData.lastSentPrice || marketData.price;
+                if (btcChart && btcChart.data && btcChart.data.datasets[0].data.length >= 2 && prevPrice === marketData.price) {
+                    const chartPrices = btcChart.data.datasets[0].data;
+                    prevPrice = chartPrices[chartPrices.length - 2];
+                }
+
+                const delta30mPct = ((marketData.price - prevPrice) / prevPrice) * 100;
+                const delta30mEur = marketData.price - prevPrice;
+
+                const isUp24h = marketData.change24h >= 0;
+                const isUp30m = delta30mPct >= 0;
+
+                const embedColor = customAlertTitle 
+                    ? 16225050
+                    : (isUp24h ? 1096065 : 16007998);
+
+                const trendEmoji24h = isUp24h ? '📈' : '📉';
+                const trendEmoji30m = isUp30m ? '🟢' : '🔴';
+
+                const embedPayload = {
+                    username: 'BTC/EUR Live Tracker',
+                    avatar_url: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png',
+                    embeds: [
+                        {
+                            title: customAlertTitle || `${trendEmoji24h} Rapport Bitcoin (BTC / EUR) — ${currentTimeframe}`,
+                            color: embedColor,
+                            fields: [
+                                {
+                                    name: '💰 Prix Actuel',
+                                    value: `**${formatEur(marketData.price)}**`,
+                                    inline: true
+                                },
+                                {
+                                    name: `${trendEmoji24h} Variation 24h`,
+                                    value: `**${isUp24h ? '+' : ''}${marketData.change24h.toFixed(2)}%** (${isUp24h ? '+' : ''}${formatEur(marketData.diff24hEur)})`,
+                                    inline: true
+                                },
+                                {
+                                    name: `${trendEmoji30m} Var. sur 30 min`,
+                                    value: `**${isUp30m ? '+' : ''}${delta30mPct.toFixed(2)}%** (${isUp30m ? '+' : ''}${formatEur(delta30mEur)})`,
+                                    inline: true
+                                },
+                                {
+                                    name: '⬆️ Plus Haut 24h',
+                                    value: formatEur(marketData.high24h, 0),
+                                    inline: true
+                                },
+                                {
+                                    name: '⬇️ Plus Bas 24h',
+                                    value: formatEur(marketData.low24h, 0),
+                                    inline: true
+                                },
+                                {
+                                    name: '🧭 Fear & Greed',
+                                    value: `${marketData.fngValue}/100 (${marketData.fngClassification})`,
+                                    inline: true
+                                }
+                            ],
+                            image: {
+                                url: 'attachment://btc_chart.png'
+                            },
+                            footer: {
+                                text: `BTC/EUR Terminal • ${isManual ? 'Envoi manuel' : 'Rapport auto 30m'}`
+                            },
+                            timestamp: new Date().toISOString()
+                        }
+                    ]
+                };
+
+                const canvas = document.getElementById('btcChart');
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+
+                const formData = new FormData();
+                formData.append('payload_json', JSON.stringify(embedPayload));
+                if (blob) {
+                    formData.append('files[0]', blob, 'btc_chart.png');
+                }
+
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                if (!customAlertTitle) {
+                    marketData.lastSentPrice = marketData.price;
+                    localStorage.setItem('btc_last_sent_price', marketData.price);
+                    updateMarketUI();
+                }
+
+                window.discordSentSuccess = true;
+                const logMsg = customAlertTitle 
+                    ? `Alerte prix envoyée sur Discord (${formatEur(marketData.price)})`
+                    : `Rapport + graphique envoyés sur Discord (${formatEur(marketData.price)})`;
+                
+                addLog(logMsg, 'success');
+                if (isManual) showToast('Rapport envoyé avec succès sur Discord !', 'success');
+                return true;
+
+            } catch (error) {
+                console.error('Discord Webhook Error:', error);
+                addLog(`Erreur d'envoi Discord : ${error.message}`, 'error');
+                if (isManual) showToast('Erreur lors de l\'envoi vers Discord.', 'error');
+                return false;
+            } finally {
+                if (isManual && btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = `<i data-lucide="send" class="w-3.5 h-3.5"></i> Tester maintenant`;
+                    lucide.createIcons();
+                }
+            }
+        }
+
+        function startCountdownLoop() {
+            setInterval(() => {
+                if (!isAutoSendEnabled) return;
+
+                remainingSeconds--;
+                if (remainingSeconds <= 0) {
+                    remainingSeconds = INTERVAL_SECONDS;
+                    fetchChartData(currentTimeframe).then(() => {
+                        sendDiscordReport(false);
+                    });
+                }
+
+                updateCountdownUI();
+            }, 1000);
+        }
+
+        function updateCountdownUI() {
+            const mins = Math.floor(remainingSeconds / 60).toString().padStart(2, '0');
+            const secs = (remainingSeconds % 60).toString().padStart(2, '0');
+            const formatted = `${mins}:${secs}`;
+
+            document.getElementById('main-countdown').textContent = formatted;
+            document.getElementById('header-countdown').textContent = formatted;
+
+            const pct = (remainingSeconds / INTERVAL_SECONDS) * 100;
+            document.getElementById('countdown-progress').style.width = `${pct}%`;
+        }
+
+        function toggleAutoSend() {
+            isAutoSendEnabled = document.getElementById('auto-send-toggle').checked;
+            const statusLabel = document.getElementById('auto-status-label');
+            if (isAutoSendEnabled) {
+                statusLabel.textContent = '● Actif';
+                statusLabel.className = 'text-emerald-400 font-medium';
+                addLog('Envoi automatique (30m) activé.', 'info');
+            } else {
+                statusLabel.textContent = '○ En pause';
+                statusLabel.className = 'text-zinc-500 font-medium';
+                addLog('Envoi automatique mis en pause.', 'warning');
+            }
+        }
+
+        function resetTimer() {
+            remainingSeconds = INTERVAL_SECONDS;
+            updateCountdownUI();
+            showToast('Compte à rebours réinitialisé à 30:00', 'info');
+        }
+
+        function toggleWebhookVisibility() {
+            const input = document.getElementById('webhook-url');
+            const text = document.getElementById('eye-text');
+            if (input.type === 'password') {
+                input.type = 'text';
+                text.textContent = 'Masquer';
+            } else {
+                input.type = 'password';
+                text.textContent = 'Afficher';
+            }
+        }
+
+        function saveWebhookUrl() {
+            const url = document.getElementById('webhook-url').value.trim();
+            localStorage.setItem('btc_discord_webhook', url);
+            showToast('URL du Webhook sauvegardée localement !', 'success');
+            addLog('Configuration du Webhook mise à jour.', 'info');
+        }
+
+        function togglePriceAlert() {
+            const input = document.getElementById('alert-target-price');
+            const btn = document.getElementById('alert-toggle-btn');
+            const badge = document.getElementById('alert-status-badge');
+            const info = document.getElementById('alert-info-text');
+
+            if (priceAlert.active) {
+                priceAlert.active = false;
+                btn.textContent = 'Activer';
+                btn.className = 'px-3 py-2 rounded-xl bg-btc hover:bg-amber-500 text-zinc-950 font-semibold text-xs transition shrink-0 cursor-pointer';
+                badge.textContent = 'Inactive';
+                badge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400';
+                info.textContent = 'Alerte désactivée.';
+                return;
+            }
+
+            const targetVal = parseFloat(input.value);
+            if (!targetVal || targetVal <= 0 || !marketData.price) {
+                showToast('Entre un prix cible valide en €.', 'warning');
+                return;
+            }
+
+            priceAlert.active = true;
+            priceAlert.target = targetVal;
+            priceAlert.direction = targetVal > marketData.price ? 'above' : 'below';
+
+            btn.textContent = 'Stop';
+            btn.className = 'px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition shrink-0 cursor-pointer';
+            badge.textContent = 'Active';
+            badge.className = 'text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+
+            const dirText = priceAlert.direction === 'above' ? 'dépasse' : 'passe sous';
+            info.innerHTML = `Alerte si le BTC ${dirText} <strong class="text-white mono">${formatEur(targetVal, 0)}</strong>`;
+            showToast(`Alerte activée pour ${formatEur(targetVal, 0)}`, 'success');
+            addLog(`Alerte configurée : seuil à ${formatEur(targetVal, 0)}.`, 'info');
+        }
+
+        function checkPriceAlert() {
+            if (!priceAlert.active || !marketData.price) return;
+
+            const triggered = (priceAlert.direction === 'above' && marketData.price >= priceAlert.target) ||
+                              (priceAlert.direction === 'below' && marketData.price <= priceAlert.target);
+
+            if (triggered) {
+                const targetFormatted = formatEur(priceAlert.target, 0);
+                sendDiscordReport(false, `🚨 ALERTE PRIX : Le Bitcoin a franchi ${targetFormatted} !`);
+                showToast(`🚨 Alerte franchie (${targetFormatted}) ! Notification envoyée sur Discord.`, 'warning');
+                togglePriceAlert();
+            }
+        }
+
+        let lastEditedConv = 'eur';
+        function convertFromEur() {
+            lastEditedConv = 'eur';
+            const eur = parseFloat(document.getElementById('conv-eur').value) || 0;
+            if (!marketData.price) return;
+            const btc = eur / marketData.price;
+            document.getElementById('conv-btc').value = btc.toFixed(6);
+            document.getElementById('conv-sats').textContent = `${Math.round(btc * 100000000).toLocaleString('fr-FR')} sats`;
+        }
+
+        function convertFromBtc() {
+            lastEditedConv = 'btc';
+            const btc = parseFloat(document.getElementById('conv-btc').value) || 0;
+            if (!marketData.price) return;
+            const eur = btc * marketData.price;
+            document.getElementById('conv-eur').value = eur.toFixed(2);
+            document.getElementById('conv-sats').textContent = `${Math.round(btc * 100000000).toLocaleString('fr-FR')} sats`;
+        }
+
+        function updateConverterFromCurrentPrice() {
+            if (lastEditedConv === 'eur') convertFromEur();
+            else convertFromBtc();
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            const savedUrl = localStorage.getItem('btc_discord_webhook');
+            if (savedUrl && savedUrl.startsWith('https://discord.com/api/webhooks/')) {
+                document.getElementById('webhook-url').value = savedUrl;
+            } else {
+                document.getElementById('webhook-url').value = DEFAULT_WEBHOOK_URL;
+            }
+
+            addLog('Initialisation du terminal BTC/EUR...', 'info');
+            
+            await Promise.all([
+                fetchMarketStats(),
+                fetchChartData('24H'),
+                fetchFearAndGreed()
+            ]);
+
+            window.dataReady = true;
+            addLog('Données marché & graphique chargés. Cycle 30m démarré.', 'success');
+            startCountdownLoop();
+
+            setInterval(fetchMarketStats, 15000);
+            setInterval(() => fetchChartData(currentTimeframe), 120000);
+        });
+    </script>
+</body>
+</html>
